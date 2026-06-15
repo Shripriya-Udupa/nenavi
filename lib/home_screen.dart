@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'screens/daily_assessment/attention_task_screen.dart';
@@ -20,7 +19,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _language = 'kn';
   int? _lastCompositeScore;
   String? _lastDate;
   bool _isAssessing = false;
@@ -32,9 +30,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadLanguageAndLastScore() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() => _language = prefs.getString('language') ?? 'kn');
     final user = FirebaseAuth.instance.currentUser;
     final latest = await DatabaseHelper().getLatestScore(patientUid: user?.uid);
     if (!mounted) return;
@@ -46,8 +41,39 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<String?> _showLanguageDialog() async {
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Select Language'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('ಕನ್ನಡ (Kannada)'),
+              onTap: () => Navigator.pop(ctx, 'kn'),
+            ),
+            ListTile(
+              title: const Text('ತುಳು (Tulu)'),
+              onTap: () => Navigator.pop(ctx, 'tcy'),
+            ),
+            ListTile(
+              title: const Text('English'),
+              onTap: () => Navigator.pop(ctx, 'en'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _startAssessment() async {
     if (_isAssessing) return;
+
+    // Show language selection dialog
+    final selectedLanguage = await _showLanguageDialog();
+    if (selectedLanguage == null) return; // User cancelled
+
     setState(() => _isAssessing = true);
 
     try {
@@ -56,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
         context,
         MaterialPageRoute(
           builder: (ctx) => AttentionTaskScreen(
-            language: _language,
+            language: selectedLanguage,
             onComplete: (score, seedPhrase, enteredNumber) =>
                 Navigator.pop(ctx, [score, seedPhrase, enteredNumber]),
           ),
@@ -74,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (ctx) => WordRecallEncodingScreen(
-                    language: _language,
+                    language: selectedLanguage,
                     onComplete: (w) => Navigator.pop(ctx, w),
                   ),
                 ),
@@ -89,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (ctx) => IncidentalMemoryScreen(
-                    language: _language,
+                    language: selectedLanguage,
                     seedPhrase: seedPhrase,
                     onComplete: (s) => Navigator.pop(ctx, s),
                   ),
@@ -105,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (ctx) => OrientationScreen(
-                    language: _language,
+                    language: selectedLanguage,
                     onComplete: (s) => Navigator.pop(ctx, s),
                   ),
                 ),
@@ -120,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (ctx) => CalculationScreen(
-                    language: _language,
+                    language: selectedLanguage,
                     onComplete: (s) => Navigator.pop(ctx, s),
                   ),
                 ),
@@ -135,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (ctx) => DelayedWordRecallScreen(
-                    language: _language,
+                    language: selectedLanguage,
                     originalWords: encodedWords,
                     onComplete: (s) => Navigator.pop(ctx, s),
                   ),
@@ -154,7 +180,9 @@ class _HomeScreenState extends State<HomeScreen> {
           calculationScore +
           delayedScore;
       final composite = (total * 100) ~/ maxTotal;
-      final today = DateTime.now().toIso8601String().split('T')[0];
+      final now = DateTime.now();
+      final date = now.toIso8601String().split('T')[0];
+      final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
 
       final domainScoresMap = {
         'attention': attentionScore,
@@ -167,11 +195,13 @@ class _HomeScreenState extends State<HomeScreen> {
       // Save to local SQLite
       final user = FirebaseAuth.instance.currentUser;
       await DatabaseHelper().insertScore({
-        'date': today,
+        'date': date,
+        'time': time,
         'composite_score': composite,
         'domain_scores': jsonEncode(domainScoresMap),
         'difficulty': 'Basic',
         'patient_uid': user?.uid,
+        'timestamp': now.millisecondsSinceEpoch,
       });
 
       // Save to Firestore
@@ -180,19 +210,19 @@ class _HomeScreenState extends State<HomeScreen> {
         if (user != null) {
           await FirebaseFirestore.instance
               .collection('scores')
-              .doc('${user.uid}_$today')
+              .doc('${user.uid}_$date')
               .set({
                 'patientUid': user.uid,
-                'date': today,
+                'date': date,
                 'compositeScore': composite,
                 'domainScores': domainScoresMap,
                 'difficulty': 'Basic',
                 'timestamp': FieldValue.serverTimestamp(),
               });
-          print('Score saved to Firestore');
+          debugPrint('Score saved to Firestore');
         }
       } catch (e) {
-        print('Firestore save error: $e');
+        debugPrint('Firestore save error: $e');
       }
 
       if (!mounted) return;

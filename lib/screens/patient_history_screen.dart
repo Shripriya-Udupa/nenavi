@@ -40,8 +40,10 @@ class _PatientHistoryScreenState extends State<PatientHistoryScreen> {
         final data = d.data();
         return {
           'date': data['date'] ?? '',
+          'time': data['time'] ?? '',
           'compositeScore': data['compositeScore'] ?? data['composite_score'] ?? 0,
           'difficulty': data['difficulty'] ?? 'Basic',
+          'timestamp': data['timestamp'] ?? 0,
         };
       }).toList();
     } catch (e) {
@@ -49,8 +51,10 @@ class _PatientHistoryScreenState extends State<PatientHistoryScreen> {
       final local = await DatabaseHelper().getAllScores(patientUid: uid);
       return local.map((r) => {
             'date': r['date'] ?? '',
+            'time': r['time'] ?? '',
             'compositeScore': r['composite_score'] ?? 0,
             'difficulty': r['difficulty'] ?? 'Basic',
+            'timestamp': r['timestamp'] ?? 0,
           }).toList();
     }
   }
@@ -122,6 +126,7 @@ class _PatientHistoryScreenState extends State<PatientHistoryScreen> {
                   itemBuilder: (ctx, index) {
                     final data = docs[index];
                     final date = data['date'] as String? ?? '';
+                    final time = data['time'] as String? ?? '';
                     final score = data['compositeScore'] as int? ?? 0;
                     final difficulty = data['difficulty'] ?? 'Basic';
                     Color cardColor;
@@ -137,7 +142,7 @@ class _PatientHistoryScreenState extends State<PatientHistoryScreen> {
                       color: cardColor,
                       child: ListTile(
                         leading: const Icon(Icons.calendar_today),
-                        title: Text(date),
+                        title: Text('$date ${time.isNotEmpty ? '• $time' : ''}'),
                         subtitle: Text('Score: $score/100\nDifficulty: $difficulty'),
                       ),
                     );

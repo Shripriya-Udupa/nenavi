@@ -19,27 +19,55 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'nenavi.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
-        // Create the scores table with patient_uid
+        // Create the scores table with patient_uid and timestamp
         await db.execute('''
           CREATE TABLE scores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT UNIQUE,          -- store as YYYY-MM-DD
+            date TEXT,                 -- store as YYYY-MM-DD
+            time TEXT,                 -- store time HH:MM:SS
             composite_score INTEGER,
-            domain_scores TEXT,        -- we'll store a JSON string
+            domain_scores TEXT,        -- JSON string
             difficulty TEXT,
-            patient_uid TEXT
+            patient_uid TEXT,
+            timestamp INTEGER          -- milliseconds since epoch for sorting
           )
         ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          // add patient_uid column for existing databases
           try {
             await db.execute('ALTER TABLE scores ADD COLUMN patient_uid TEXT');
           } catch (e) {
             // ignore if column already exists
+          }
+        }
+        if (oldVersion < 3) {
+          try {
+            await db.execute('ALTER TABLE scores ADD COLUMN time TEXT');
+            await db.execute('ALTER TABLE scores ADD COLUMN timestamp INTEGER');
+            // Remove UNIQUE constraint by recreating the table
+            await db.execute('ALTER TABLE scores RENAME TO scores_old');
+            await db.execute('''
+              CREATE TABLE scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT,
+                time TEXT,
+                composite_score INTEGER,
+                domain_scores TEXT,
+                difficulty TEXT,
+                patient_uid TEXT,
+                timestamp INTEGER
+              )
+            ''');
+            await db.execute('''
+              INSERT INTO scores (id, date, composite_score, domain_scores, difficulty, patient_uid)
+              SELECT id, date, composite_score, domain_scores, difficulty, patient_uid FROM scores_old
+            ''');
+            await db.execute('DROP TABLE scores_old');
+          } catch (e) {
+            debugPrint('Migration error: $e');
           }
         }
       },
