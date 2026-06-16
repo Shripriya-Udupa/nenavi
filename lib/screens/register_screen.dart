@@ -1,172 +1,257 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../main.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
-
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final _emailCtrl    = TextEditingController();
+  final _passCtrl     = TextEditingController();
+  final _cgEmailCtrl  = TextEditingController();
   String _role = 'patient';
-  final TextEditingController _caregiverEmailController =
-      TextEditingController();
-  bool _isLoading = false;
+  bool _loading = false;
+  bool _obscure = true;
   String _error = '';
 
   Future<void> _register() async {
-    if (_isLoading) return;
-    setState(() {
-      _isLoading = true;
-      _error = '';
-    });
+    if (_loading) return;
+    setState(() { _loading = true; _error = ''; });
 
     try {
-      final email = _emailController.text.trim();
-      final password = _passwordController.text.trim();
-      if (email.isEmpty || password.isEmpty) {
-        throw Exception('Email and password required');
-      }
+      final email    = _emailCtrl.text.trim();
+      final password = _passCtrl.text.trim();
+      if (email.isEmpty || password.isEmpty) throw Exception('Email and password are required.');
 
-      debugPrint('Register: creating user for $email');
-      // 1. Create user in Firebase Auth (with timeout to avoid indefinite hang)
-      UserCredential userCredential = await FirebaseAuth.instance
+      final cred = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password)
-          .timeout(const Duration(seconds: 20), onTimeout: () {
-        throw Exception('Auth request timed out');
-      });
-      final uid = userCredential.user!.uid;
-      debugPrint('Register: created uid=$uid');
+          .timeout(const Duration(seconds: 20));
+      final uid = cred.user!.uid;
 
-      // 2. Prepare user data for Firestore
-      Map<String, dynamic> userData = {
-        'email': email,
-        'role': _role,
+      final userData = {
+        'email': email, 'role': _role,
         'createdAt': FieldValue.serverTimestamp(),
       };
 
       if (_role == 'patient') {
-        final caregiverEmail = _caregiverEmailController.text.trim();
-        if (caregiverEmail.isEmpty) {
-          throw Exception('Caregiver email required for patient');
-        }
-        userData['caregiverEmail'] = caregiverEmail;
+        final cgEmail = _cgEmailCtrl.text.trim();
+        if (cgEmail.isEmpty) throw Exception('Please enter your caregiver\'s email.');
+        userData['caregiverEmail'] = cgEmail;
 
-        debugPrint('Register: looking up caregiver $caregiverEmail');
-        // Check if caregiver exists and add patient to caregiver's subcollection
-        final caregiverQuery = await FirebaseFirestore.instance
-            .collection('users')
-            .where('email', isEqualTo: caregiverEmail)
-            .where('role', isEqualTo: 'caregiver')
-            .limit(1)
-            .get()
-            .timeout(const Duration(seconds: 20), onTimeout: () {
-          throw Exception('Firestore caregiver lookup timed out');
+        await FirebaseFirestore.instance.collection('users').doc(uid).set(userData);
+
+        final cgSnap = await FirebaseFirestore.instance
+            .collection('caregiver_registry').doc(cgEmail).get()
+            .timeout(const Duration(seconds: 20));
+
+        if (!cgSnap.exists) {
+          await cred.user!.delete();
+          throw Exception('Caregiver "$cgEmail" not found. Ask them to register first.');
+        }
+        final cgUid = cgSnap.data()?['uid'] as String?;
+        if (cgUid == null) { await cred.user!.delete(); throw Exception('Invalid caregiver data.'); }
+
+        await FirebaseFirestore.instance.collection('pending_patient_links').doc(uid).set({
+          'patientUid': uid, 'patientEmail': email,
+          'caregiverUid': cgUid, 'caregiverEmail': cgEmail,
+          'linkedAt': FieldValue.serverTimestamp(), 'status': 'pending',
         });
-
-        if (caregiverQuery.docs.isEmpty) {
-          throw Exception('Caregiver not found. Register caregiver first.');
-        }
-
-        final caregiverDoc = caregiverQuery.docs.first;
-        await caregiverDoc.reference.collection('patients').doc(uid).set({
-          'patientEmail': email,
-          'patientUid': uid,
-          'linkedAt': FieldValue.serverTimestamp(),
-        }).timeout(const Duration(seconds: 20), onTimeout: () {
-          throw Exception('Firestore set timed out');
+      } else {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set(userData);
+        await FirebaseFirestore.instance.collection('caregiver_registry').doc(email).set({
+          'uid': uid, 'email': email,
+          'registeredAt': FieldValue.serverTimestamp(),
         });
       }
 
-      debugPrint('Register: saving user doc');
-      // 3. Save user document
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .set(userData)
-          .timeout(const Duration(seconds: 20), onTimeout: () {
-        throw Exception('Saving user doc timed out');
-      });
-
-      debugPrint('Register: saved user doc');
-
-      // 4. Success
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Registration successful! Please login.'),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(_role == 'patient'
+              ? 'Account created! You are linked to your caregiver.'
+              : 'Account created! Please sign in.'),
+          backgroundColor: NenaviTheme.secondary,
+        ));
         Navigator.pop(context);
       }
     } on FirebaseAuthException catch (e) {
-      debugPrint('Register: FirebaseAuthException: ${e.message}');
-      if (mounted) setState(() => _error = e.message ?? 'Auth error');
+      setState(() => _error = e.message ?? 'Registration failed.');
     } catch (e) {
-      debugPrint('Register: Exception: $e');
-      if (mounted) setState(() => _error = e.toString());
+      setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Register')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      backgroundColor: NenaviTheme.background,
+      appBar: AppBar(
+        title: const Text('Create Account'),
+        leading: const BackButton(),
+      ),
+      body: NenaviPage(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ── Header ───────────────────────────────────────────────
+            Text('Welcome to Nenavi',
+                style: NenaviTheme.heading(color: NenaviTheme.accent)),
+            const SizedBox(height: 6),
+            Text('Fill in the details below to get started.',
+                style: NenaviTheme.body(color: NenaviTheme.secondary)),
+            const SizedBox(height: 32),
+
+            // ── Email ─────────────────────────────────────────────────
+            Text('Your Email', style: NenaviTheme.label()),
+            const SizedBox(height: 8),
             TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
+              controller: _emailCtrl,
               keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password'),
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              value: _role,
-              items: const [
-                DropdownMenuItem(value: 'patient', child: Text('Patient')),
-                DropdownMenuItem(value: 'caregiver', child: Text('Caregiver')),
-              ],
-              onChanged: (value) => setState(() => _role = value!),
-              decoration: const InputDecoration(labelText: 'Role'),
-            ),
-            if (_role == 'patient') ...[
-              const SizedBox(height: 10),
-              TextField(
-                controller: _caregiverEmailController,
-                decoration: const InputDecoration(labelText: 'Caregiver Email'),
+              style: NenaviTheme.body(),
+              decoration: const InputDecoration(
+                hintText: 'your@email.com',
+                prefixIcon: Icon(Icons.mail_outline),
               ),
-            ],
-            const SizedBox(height: 20),
-            if (_error.isNotEmpty)
-              Text(_error, style: const TextStyle(color: Colors.red)),
-            const SizedBox(height: 10),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _register,
-                    child: const Text('Register'),
-                  ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Back to Login'),
             ),
+            const SizedBox(height: 20),
+
+            // ── Password ──────────────────────────────────────────────
+            Text('Password', style: NenaviTheme.label()),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _passCtrl,
+              obscureText: _obscure,
+              style: NenaviTheme.body(),
+              decoration: InputDecoration(
+                hintText: 'At least 6 characters',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscure
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Role ──────────────────────────────────────────────────
+            Text('I am a…', style: NenaviTheme.label()),
+            const SizedBox(height: 8),
+            _RoleSelector(
+              value: _role,
+              onChanged: (v) => setState(() => _role = v),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Caregiver email (patient only) ────────────────────────
+            if (_role == 'patient') ...[
+              Text('Caregiver\'s Email', style: NenaviTheme.label()),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _cgEmailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                style: NenaviTheme.body(),
+                decoration: const InputDecoration(
+                  hintText: 'caregiver@email.com',
+                  prefixIcon: Icon(Icons.favorite_outline),
+                  helperText: 'Your caregiver must have an account first',
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+
+            if (_error.isNotEmpty) NenaviError(_error),
+
+            // ── Submit ────────────────────────────────────────────────
+            _loading
+                ? const Center(child: CircularProgressIndicator())
+                : ElevatedButton.icon(
+                    onPressed: _register,
+                    icon: const Icon(Icons.person_add_alt_1, size: 24),
+                    label: const Text('Create Account'),
+                  ),
+            const SizedBox(height: 16),
+            Center(
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Already have an account? Sign in'),
+              ),
+            ),
+            const SizedBox(height: 32),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Big tap-friendly role selector
+class _RoleSelector extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+  const _RoleSelector({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(child: _RoleTile(
+        label: 'Patient',
+        icon: Icons.person,
+        selected: value == 'patient',
+        onTap: () => onChanged('patient'),
+      )),
+      const SizedBox(width: 12),
+      Expanded(child: _RoleTile(
+        label: 'Caregiver',
+        icon: Icons.medical_services_outlined,
+        selected: value == 'caregiver',
+        onTap: () => onChanged('caregiver'),
+      )),
+    ]);
+  }
+}
+
+class _RoleTile extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  const _RoleTile({
+    required this.label, required this.icon,
+    required this.selected, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(
+          color: selected ? NenaviTheme.primary : Colors.white.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? NenaviTheme.primary : NenaviTheme.secondary.withOpacity(0.4),
+            width: 2,
+          ),
+        ),
+        child: Column(children: [
+          Icon(icon, size: 32,
+              color: selected ? Colors.white : NenaviTheme.accent),
+          const SizedBox(height: 6),
+          Text(label,
+              style: NenaviTheme.body(
+                  color: selected ? Colors.white : NenaviTheme.accent)
+                  .copyWith(fontWeight: FontWeight.bold)),
+        ]),
       ),
     );
   }
