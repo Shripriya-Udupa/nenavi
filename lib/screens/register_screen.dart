@@ -5,7 +5,7 @@ import '../main.dart';
 import '../services/patient_link_service.dart';
 import '../localization.dart';
 import '../widgets/language_selector.dart';
-import '../widgets/speakable_text.dart';
+
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});

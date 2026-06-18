@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../services/database_helper.dart';
 import '../services/score_service.dart';
 import '../main.dart';
+import '../widgets/language_selector.dart';
 
 class PatientHistoryScreen extends StatefulWidget {
   final String? patientUid;
@@ -135,6 +136,12 @@ class _PatientHistoryScreenState extends State<PatientHistoryScreen> {
               ? widget.patientEmail!
               : 'Score History',
         ),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: LanguageSelector(),
+          ),
+        ],
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _scoresFuture,

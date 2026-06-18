@@ -12,7 +12,7 @@ import 'services/database_helper.dart';
 import 'main.dart';
 import 'localization.dart';
 import 'widgets/language_selector.dart';
-import 'widgets/speakable_text.dart';
+
 import 'dart:convert';
 
 class HomeScreen extends StatefulWidget {

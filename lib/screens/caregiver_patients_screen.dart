@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:nenavi/screens/patient_history_screen.dart';
 import '../main.dart';
 import '../services/patient_link_service.dart';
+import '../widgets/language_selector.dart';
 
 class CaregiverPatientsScreen extends StatefulWidget {
   const CaregiverPatientsScreen({super.key});
@@ -53,7 +54,15 @@ class _CaregiverPatientsScreenState extends State<CaregiverPatientsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: NenaviTheme.background,
-      appBar: AppBar(title: const Text('My Patients')),
+      appBar: AppBar(
+        title: const Text('My Patients'),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: LanguageSelector(),
+          ),
+        ],
+      ),
       body: FutureBuilder<List<Map<String, String>>>(
         future: _patientsFuture,
         builder: (context, snapshot) {

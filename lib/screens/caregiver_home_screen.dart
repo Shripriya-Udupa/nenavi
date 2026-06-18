@@ -5,6 +5,7 @@ import 'patient_history_screen.dart';
 import '../main.dart';
 import '../services/patient_link_service.dart';
 import '../services/score_service.dart';
+import '../widgets/language_selector.dart';
 
 class CaregiverHomeScreen extends StatefulWidget {
   const CaregiverHomeScreen({super.key});
@@ -86,6 +87,10 @@ class _CaregiverHomeScreenState extends State<CaregiverHomeScreen> {
       appBar: AppBar(
         title: const Text('Caregiver Dashboard'),
         actions: [
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: LanguageSelector(),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
