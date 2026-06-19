@@ -7,6 +7,9 @@ import 'screens/daily_assessment/orientation_screen.dart';
 import 'screens/daily_assessment/delayed_word_recall_screen.dart';
 import 'screens/daily_assessment/calculation_screen.dart';
 import 'screens/daily_assessment/incidental_memory_screen.dart';
+import 'screens/daily_assessment/trails_task_screen.dart';
+import 'screens/daily_assessment/stroop_task_screen.dart';
+import 'screens/daily_assessment/visualization_task_screen.dart';
 import 'package:nenavi/screens/patient_history_screen.dart';
 import 'services/database_helper.dart';
 import 'main.dart';
@@ -48,7 +51,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isAssessing) return;
     setState(() => _isAssessing = true);
     final lang = globalLanguage.value;
-    final endTime = DateTime.now().add(const Duration(minutes: 10));
+    final startTime = DateTime.now();
+    final endTime = startTime.add(const Duration(minutes: 15));
 
     try {
       final attResult = await Navigator.push(
@@ -138,6 +142,57 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
+      final trailsScore =
+          await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (ctx) => TrailsTaskScreen(
+                    language: lang,
+                    endTime: endTime,
+                    onComplete: (s) => Navigator.pop(ctx, s),
+                  ),
+                ),
+              )
+              as int?;
+      if (!mounted || trailsScore == null) {
+        setState(() => _isAssessing = false);
+        return;
+      }
+
+      final stroopScore =
+          await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (ctx) => StroopTaskScreen(
+                    language: lang,
+                    endTime: endTime,
+                    onComplete: (s) => Navigator.pop(ctx, s),
+                  ),
+                ),
+              )
+              as int?;
+      if (!mounted || stroopScore == null) {
+        setState(() => _isAssessing = false);
+        return;
+      }
+
+      final visuospatialScore =
+          await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (ctx) => VisualizationTaskScreen(
+                    language: lang,
+                    endTime: endTime,
+                    onComplete: (s) => Navigator.pop(ctx, s),
+                  ),
+                ),
+              )
+              as int?;
+      if (!mounted || visuospatialScore == null) {
+        setState(() => _isAssessing = false);
+        return;
+      }
+
       final delayedScore =
           await Navigator.push(
                 context,
@@ -156,21 +211,29 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      const int maxTotal = 14;
+      const int maxTotal = 14 + 13 + 15 + 6; // previous 5 domains + trails + stroop + visuospatial
       final total =
           attScore +
           incidentalScore +
           orientationScore +
           calcScore +
-          delayedScore;
+          delayedScore +
+          trailsScore +
+          stroopScore +
+          visuospatialScore;
       final composite = (total * 100) ~/ maxTotal;
       final today = DateTime.now().toIso8601String().split('T')[0];
+      final endedAt = DateTime.now();
+      final durationSeconds = endedAt.difference(startTime).inSeconds;
       final domainMap = {
         'attention': attScore,
         'incidental_memory': incidentalScore,
         'orientation': orientationScore,
         'calculation': calcScore,
         'delayed_recall': delayedScore,
+        'trails': trailsScore,
+        'stroop': stroopScore,
+        'visuospatial': visuospatialScore,
       };
       final user = FirebaseAuth.instance.currentUser;
 
@@ -180,6 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'domain_scores': jsonEncode(domainMap),
         'difficulty': 'Basic',
         'patient_uid': user?.uid,
+        'duration_seconds': durationSeconds,
       });
 
       if (user != null) {
@@ -193,6 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 'compositeScore': composite,
                 'domainScores': domainMap,
                 'difficulty': 'Basic',
+                'durationSeconds': durationSeconds,
                 'timestamp': FieldValue.serverTimestamp(),
               });
         } catch (e) {

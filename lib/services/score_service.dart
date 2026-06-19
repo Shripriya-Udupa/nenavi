@@ -51,6 +51,8 @@ class ScoreService {
           (data['compositeScore'] ?? data['composite_score'] ?? 0) as int,
       'difficulty': data['difficulty'] ?? 'Basic',
       'timestamp': data['timestamp'],
+      'durationSeconds':
+          (data['durationSeconds'] ?? data['duration_seconds']) as int?,
     };
   }
 }

@@ -52,6 +52,7 @@ class _PatientHistoryScreenState extends State<PatientHistoryScreen> {
             'compositeScore': r['composite_score'] ?? 0,
             'difficulty': r['difficulty'] ?? 'Basic',
             'timestamp': r['timestamp'] ?? 0,
+            'durationSeconds': r['duration_seconds'],
           },
         )
         .toList()
@@ -207,6 +208,10 @@ class _PatientHistoryScreenState extends State<PatientHistoryScreen> {
                     final date = d['date'] as String? ?? '';
                     final time = d['time'] as String? ?? ''; // kept from old
                     final diff = d['difficulty'] ?? 'Basic';
+                    final durationSeconds = d['durationSeconds'] as int?;
+                    final durationLabel = (durationSeconds != null)
+                        ? '${(durationSeconds ~/ 60)}m ${(durationSeconds % 60)}s'
+                        : null;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -250,6 +255,15 @@ class _PatientHistoryScreenState extends State<PatientHistoryScreen> {
                                     color: NenaviTheme.secondary,
                                   ),
                                 ),
+                                if (durationLabel != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Time taken: $durationLabel',
+                                    style: NenaviTheme.small(
+                                      color: NenaviTheme.secondary,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ],

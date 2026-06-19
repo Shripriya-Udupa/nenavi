@@ -71,7 +71,7 @@ class QuestionBank {
     'tcy': {
       'instruction': 'ಪದೊಕುಲೆನ್ ನೆಂಪು ಮಲ್ಪುಲೆ',
       'wordsToRemember': ['ಕಾರ್', 'ಸೇಬು', 'ಇಲ್ಲ್', 'ಪೆನ್', 'ನೀರ್'],
-      'distractors': ['ಮೇಜ್', 'ಪಾಲ್', 'ಪುಸ್ತಕ', 'ಪಕ್ಕಿ', 'ಮೀನ್'],
+      'distractors': ['ಮೇಜ್', 'ಪೇರ್', 'ಪುಸ್ತಕ', 'ಪಕ್ಕಿ', 'ಮೀನ್'],
     },
     'en': {
       'instruction': 'Remember the words',
