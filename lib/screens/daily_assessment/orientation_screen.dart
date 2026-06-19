@@ -88,7 +88,8 @@ class _OrientationScreenState extends State<OrientationScreen> {
           ),
         ),
       ),
-      body: Center(
+      body: SafeArea(
+        child: Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: () {
@@ -120,6 +121,7 @@ class _OrientationScreenState extends State<OrientationScreen> {
             }
           }(),
         ),
+      ),
       ),
     );
   }
@@ -157,44 +159,49 @@ class _OrientationScreenState extends State<OrientationScreen> {
         ),
         const SizedBox(height: 32),
         Expanded(
-          child: ListView(
-            children: options.map((option) {
-              final isSelected = _selectedOption == option;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isSelected
-                        ? Colors.blue.shade400
-                        : Colors.white,
-                    foregroundColor: isSelected ? Colors.white : Colors.black87,
-                    elevation: isSelected ? 2 : 1,
-                    alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(
-                        color: isSelected
-                            ? Colors.blue.shade600
-                            : Colors.grey.shade300,
+          child: options.length > 5
+              ? _buildTwoColumnOptions(options)
+              : ListView(
+                  children: options.map((option) {
+                    final isSelected = _selectedOption == option;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isSelected
+                              ? Colors.blue.shade400
+                              : Colors.white,
+                          foregroundColor: isSelected
+                              ? Colors.white
+                              : Colors.black87,
+                          elevation: isSelected ? 2 : 1,
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: isSelected
+                                  ? Colors.blue.shade600
+                                  : Colors.grey.shade300,
+                            ),
+                          ),
+                        ),
+                        onPressed: () =>
+                            setState(() => _selectedOption = option),
+                        child: Text(
+                          option,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  onPressed: () => setState(() => _selectedOption = option),
-                  child: Text(
-                    option,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                    );
+                  }).toList(),
                 ),
-              );
-            }).toList(),
-          ),
         ),
         const SizedBox(height: 16),
         ElevatedButton(
@@ -211,6 +218,65 @@ class _OrientationScreenState extends State<OrientationScreen> {
           child: const Text('Next'),
         ),
       ],
+    );
+  }
+
+  /// Lays options out in two equal columns that always fit the available
+  /// height (no scrolling) — used for the month (12 options) and day
+  /// (7 options) questions so older patients never need to scroll to find
+  /// or tap an answer.
+  Widget _buildTwoColumnOptions(List<String> options) {
+    final rows = <List<String?>>[];
+    for (var i = 0; i < options.length; i += 2) {
+      rows.add([
+        options[i],
+        (i + 1 < options.length) ? options[i + 1] : null,
+      ]);
+    }
+
+    Widget buildCell(String? option) {
+      if (option == null) return const Expanded(child: SizedBox.shrink());
+      final isSelected = _selectedOption == option;
+      return Expanded(
+        child: Padding(
+          padding: const EdgeInsets.all(5),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isSelected ? Colors.blue.shade400 : Colors.white,
+              foregroundColor: isSelected ? Colors.white : Colors.black87,
+              elevation: isSelected ? 2 : 1,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: isSelected ? Colors.blue.shade600 : Colors.grey.shade300,
+                ),
+              ),
+            ),
+            onPressed: () => setState(() => _selectedOption = option),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                option,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: rows
+          .map(
+            (row) => Expanded(
+              child: Row(
+                children: [buildCell(row[0]), buildCell(row[1])],
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 
