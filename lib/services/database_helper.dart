@@ -20,7 +20,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'nenavi.db');
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         // Create the scores table with patient_uid and timestamp
         await db.execute('''
@@ -32,7 +32,8 @@ class DatabaseHelper {
             domain_scores TEXT,        -- JSON string
             difficulty TEXT,
             patient_uid TEXT,
-            timestamp INTEGER          -- milliseconds since epoch for sorting
+            timestamp INTEGER,         -- milliseconds since epoch for sorting
+            duration_seconds INTEGER   -- how long the assessment took
           )
         ''');
       },
@@ -69,6 +70,15 @@ class DatabaseHelper {
             await db.execute('DROP TABLE scores_old');
           } catch (e) {
             debugPrint('Migration error: $e');
+          }
+        }
+        if (oldVersion < 4) {
+          try {
+            await db.execute(
+              'ALTER TABLE scores ADD COLUMN duration_seconds INTEGER',
+            );
+          } catch (e) {
+            debugPrint('Migration error (duration_seconds): $e');
           }
         }
       },
